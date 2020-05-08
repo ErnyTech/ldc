@@ -1318,10 +1318,11 @@ static char *DtoOverloadedIntrinsicName(TemplateInstance *ti,
   } else if (dtype->isVectorTy()) {
     llvm::raw_string_ostream stream(replacement);
     stream << 'v' << dtype->getVectorNumElements() << prefix
-        << gDataLayout->getTypeSizeInBits(dtype->getVectorElementType());
+           << gDataLayout->getTypeSizeInBits(dtype->getVectorElementType());
     stream.flush();
   } else {
-    replacement = prefix + std::to_string(gDataLayout->getTypeSizeInBits(dtype));
+    replacement =
+        prefix + std::to_string(gDataLayout->getTypeSizeInBits(dtype));
   }
 
   size_t pos;
@@ -1453,13 +1454,50 @@ void printLabelName(std::ostream &target, const char *func_mangle,
 
 ////////////////////////////////////////////////////////////////////////////////
 
+void setGlobalArrayAddressSpace(const char *Array, llvm::Module &M,
+                                unsigned addressSpace) {
+  if (addressSpace == 0) {
+    return;
+  }
+
+  llvm::SmallVector<llvm::Constant *, 16> CurrentCtors;
+  llvm::IRBuilder<> IRB(M.getContext());
+  llvm::FunctionType *FnTy = llvm::FunctionType::get(IRB.getVoidTy(), false);
+  llvm::StructType *EltTy = llvm::StructType::get(
+      IRB.getInt32Ty(), llvm::PointerType::get(FnTy, addressSpace),
+      IRB.getInt8PtrTy());
+
+  if (llvm::GlobalVariable *GVCtor = M.getNamedGlobal(Array)) {
+    if (llvm::Constant *Init = GVCtor->getInitializer()) {
+      unsigned n = Init->getNumOperands();
+      CurrentCtors.reserve(n + 1);
+      for (unsigned i = 0; i != n; ++i)
+        CurrentCtors.push_back(llvm::cast<llvm::Constant>(Init->getOperand(i)));
+    }
+    GVCtor->eraseFromParent();
+  }
+
+  llvm::ArrayType *AT = llvm::ArrayType::get(EltTy, CurrentCtors.size());
+  llvm::Constant *NewInit = llvm::ConstantArray::get(AT, CurrentCtors);
+
+  (void)new llvm::GlobalVariable(M, NewInit->getType(), false,
+                                 llvm::GlobalValue::AppendingLinkage, NewInit,
+                                 Array);
+}
+
 void AppendFunctionToLLVMGlobalCtorsDtors(llvm::Function *func,
                                           const uint32_t priority,
                                           const bool isCtor) {
   if (isCtor) {
     llvm::appendToGlobalCtors(gIR->module, func, priority);
+    setGlobalArrayAddressSpace(
+        "llvm.global_ctors", gIR->module,
+        gIR->module.getDataLayout().getProgramAddressSpace());
   } else {
     llvm::appendToGlobalDtors(gIR->module, func, priority);
+    setGlobalArrayAddressSpace(
+        "llvm.global_dtors", gIR->module,
+        gIR->module.getDataLayout().getProgramAddressSpace());
   }
 }
 
