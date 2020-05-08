@@ -530,8 +530,15 @@ LLValue *DtoBitCast(LLValue *v, LLType *t, const llvm::Twine &name) {
   if (stripAddrSpaces(v->getType()) == t) {
     return v;
   }
+  
   assert(!isaStruct(t));
-  return gIR->ir->CreateBitCast(v, t, name);
+  
+  IF_LOG Logger::cout() << "pointer: " << * t->getPointerTo(1) << "\n";
+  
+  llvm::PointerType *typeValueAddr = llvm::PointerType::get(llvm::cast<llvm::PointerType>(t)->getElementType(), v->getType()->getPointerAddressSpace());
+  
+  IF_LOG Logger::cout() << "type p: " << *typeValueAddr << "\n";
+  return gIR->ir->CreateBitCast(v, typeValueAddr, name);
 }
 
 LLConstant *DtoBitCast(LLConstant *v, LLType *t) {
@@ -539,6 +546,10 @@ LLConstant *DtoBitCast(LLConstant *v, LLType *t) {
   if (stripAddrSpaces(v->getType()) == t) {
     return v;
   }
+  
+    IF_LOG Logger::cout() << "value: " << *v << "\n";
+    IF_LOG Logger::cout() << "type: " << *t << "\n";
+  
   return llvm::ConstantExpr::getBitCast(v, t);
 }
 

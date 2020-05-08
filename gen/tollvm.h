@@ -78,6 +78,7 @@ void setLinkageAndVisibility(Dsymbol *sym, llvm::GlobalObject *obj);
 // specified D symbol is not exported.
 void setVisibility(Dsymbol *sym, llvm::GlobalObject *obj);
 
+
 // some types
 LLIntegerType *DtoSize_t();
 LLStructType *DtoModuleReferenceType();
